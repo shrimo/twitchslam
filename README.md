@@ -2,7 +2,7 @@
 
 A toy implementation of monocular SLAM written while livestreaming.
 
-<img width=600px src="https://raw.githubusercontent.com/geohot/twitchslam/master/example.png" />
+![Screenshot](example.png)
 
 Stream
 -----

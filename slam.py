@@ -134,9 +134,11 @@ class SLAM(object):
                 continue
 
             # add the point
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             try:
-                color = img[int(round(f1.kpus[idx1[i],1])), int(round(f1.kpus[idx1[i],0]))]
+                # color points from frame
+                cx = int(f1.kpus[idx1[i],0])
+                cy = int(f1.kpus[idx1[i],1])
+                color = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)[cy, cx]
             except IndexError:
                 color = (255,0,0)
             pt = Point(self.mapp, p[0:3], color)
@@ -147,7 +149,8 @@ class SLAM(object):
         print("Adding:   %d new points, %d search by projection" % (new_pts_count, sbp_pts_count))
 
         # optimize the map
-        if frame.id >= 4 and frame.id%5 == 0:
+        if frame.id >= 4:
+        # if frame.id >= 4 and frame.id%5 == 0:
             err = self.mapp.optimize() #verbose=True)
             print("Optimize: %f units of error" % err)
 
@@ -167,6 +170,7 @@ if __name__ == "__main__":
         disp3d = Display3D()
 
     cap = cv2.VideoCapture(sys.argv[1])
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 250)
 
     # camera parameters
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -215,18 +219,20 @@ if __name__ == "__main__":
         else:
             break
 
-
         key = cv2.waitKey(1)
         if key == ord('q') or key == 27:
             # if self.graph.stop():
             cv2.destroyAllWindows()
             break
+        elif key == ord('p'):
+            cv2.waitKey(-1)
+
         # 3-D display
         if disp3d is not None:
             disp3d.paint(slam.mapp)
 
         img = slam.mapp.frames[-1].annotate(frame)
-        # disp2d.paint(img)
+        img = cv2.resize(img, (int(W*0.75), int(H*0.75)))
         cv2.imshow('SLAM', img)
 
         i += 1

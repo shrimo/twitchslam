@@ -113,5 +113,5 @@ class EssentialMatrixTransform(object):
         dst_F_src = np.sum(dst_homogeneous * F_src.T, axis=1)
 
         return np.abs(dst_F_src) / np.sqrt(F_src[0] ** 2 + F_src[1] ** 2
-                                                                             + Ft_dst[0] ** 2 + Ft_dst[1] ** 2)
+                                            + Ft_dst[0] ** 2 + Ft_dst[1] ** 2)
 
