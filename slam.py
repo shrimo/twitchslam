@@ -170,7 +170,7 @@ if __name__ == "__main__":
         disp3d = Display3D()
 
     cap = cv2.VideoCapture(sys.argv[1])
-    cap.set(cv2.CAP_PROP_POS_FRAMES, 250)
+    # cap.set(cv2.CAP_PROP_POS_FRAMES, 250)
 
     # camera parameters
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
