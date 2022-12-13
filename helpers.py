@@ -1,5 +1,7 @@
 import os
 import numpy as np
+# np.finfo(np.dtype("float32"))
+# np.finfo(np.dtype("float64"))
 
 # colors shamelessly stolen from
 # https://github.com/MagicLeapResearch/SuperPointPretrainedNetwork/blob/master/demo_superpoint.py
@@ -59,7 +61,7 @@ def fundamentalToRt(F):
     # TODO: Resolve ambiguities in better ways. This is wrong.
     if t[2] < 0:
         t *= -1
-    
+
     # TODO: UGLY!
     if os.getenv("REVERSE") is not None:
         t *= -1
@@ -101,7 +103,7 @@ class EssentialMatrixTransform(object):
         self.params = U @ np.diag(S) @ V
 
         return True
-        
+
     def residuals(self, src, dst):
         # Compute the Sampson distance.
         src_homogeneous = np.column_stack([src, np.ones(src.shape[0])])

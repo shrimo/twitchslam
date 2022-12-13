@@ -1,6 +1,8 @@
 import os
 import cv2
 import numpy as np
+# np.finfo(np.dtype("float32"))
+# np.finfo(np.dtype("float64"))
 from scipy.spatial import cKDTree
 from constants import RANSAC_RESIDUAL_THRES, RANSAC_MAX_TRIALS
 np.set_printoptions(suppress=True)
@@ -98,16 +100,21 @@ def match_frames(f1, f2):
     print("Matches:  %d -> %d -> %d -> %d" % (len(f1.des), len(matches), len(inliers), sum(inliers)))
     return idx1[inliers], idx2[inliers], fundamentalToRt(model.params)
 
+def show_attributes(frame, attribut):
+    cv2.rectangle(frame, (30, 0), (110, 45), (110,50,30), -1)
+    cv2.putText(frame, attribut, (45, 30), cv2.FONT_HERSHEY_SIMPLEX , 0.5, (255,255,255), 1)
+
 FT = {'ORB':featureMappingORB, 'AKAZE':featureMappingAKAZE, 'SURF':featureMappingSURF}
 class Frame(object):
-    def __init__(self, mapp, img, K, pose=np.eye(4), tid=None, verts=None):
+    def __init__(self, mapp, img, K, pose=np.eye(4), tid=None, verts=None, algorithm='ORB'):
         self.K = np.array(K)
         self.pose = np.array(pose)
+        self.algorithm = algorithm
 
         if img is not None:
             self.h, self.w = img.shape[0:2]
             if verts is None:
-                self.kpus, self.des = FT['AKAZE'](img)
+                self.kpus, self.des = FT[algorithm](img)
                 # self.kpus, self.des = extractFeatures(img)
             else:
                 assert len(verts) < 256
@@ -142,6 +149,7 @@ class Frame(object):
             # else:
             cv2.circle(img, (u1, v1), color=(0, 255, 0), radius=6)
             cv2.drawMarker(img, (u1, v1), (0, 255, 255), 1, 8, 1, 8)
+            show_attributes(img, self.algorithm)
         return img
 
 

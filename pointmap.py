@@ -3,6 +3,8 @@ from constants import CULLING_ERR_THRES
 from frame import Frame
 import time
 import numpy as np
+# np.finfo(np.dtype("float32"))
+# np.finfo(np.dtype("float64"))
 import g2o
 import json
 
@@ -31,7 +33,7 @@ class Point(object):
 
     def orb_distance(self, des):
         return min([hamming_distance(o, des) for o in self.orb()])
-    
+
     def delete(self):
         for f,idx in zip(self.frames, self.idxs):
             f.pts[idx] = None
@@ -57,7 +59,7 @@ class Map(object):
         ret['frames'] = []
         for f in self.frames:
             ret['frames'].append({
-                'id': f.id, 'K': f.K.tolist(), 'pose': f.pose.tolist(), 'h': f.h, 'w': f.w, 
+                'id': f.id, 'K': f.K.tolist(), 'pose': f.pose.tolist(), 'h': f.h, 'w': f.w,
                 'kpus': f.kpus.tolist(), 'des': f.des.tolist(),
                 'pts': [p.id if p is not None else -1 for p in f.pts]})
         ret['max_frame'] = self.max_frame
@@ -101,7 +103,7 @@ class Map(object):
         return ret
 
     # *** optimizer ***
-    
+
     def optimize(self, local_window=LOCAL_WINDOW, fix_points=False, verbose=False, rounds=50):
         err = optimize(self.frames, self.points, local_window, fix_points, verbose, rounds)
 

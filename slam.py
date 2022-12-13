@@ -2,19 +2,22 @@
 import os
 import sys
 import time
+import numpy as np
+np.finfo(np.dtype("float32"))
+np.finfo(np.dtype("float64"))
 import cv2
 from display import Display3D
 from frame import Frame, match_frames
-import numpy as np
-import g2o
+# import g2o
 from pointmap import Map, Point
 from helpers import triangulate, add_ones
 
 np.set_printoptions(suppress=True)
 
 class SLAM(object):
-    def __init__(self, W, H, K):
+    def __init__(self, W, H, K, algorithm = 'ORB'):
         # main classes
+        self.algorithm = algorithm
         self.mapp = Map()
 
         # params
@@ -26,7 +29,7 @@ class SLAM(object):
         self.image = img
         start_time = time.time()
         assert self.image.shape[0:2] == (self.H, self.W)
-        frame = Frame(self.mapp, self.image, self.K, verts=verts)
+        frame = Frame(self.mapp, self.image, self.K, verts=verts, algorithm = self.algorithm)
 
         if frame.id == 0:
             return
@@ -52,12 +55,11 @@ class SLAM(object):
 
         # pose optimization
         if pose is None:
-            #print(f1.pose)
             pose_opt = self.mapp.optimize(local_window=1, fix_points=True)
             print("Pose:     %f" % pose_opt)
-            #print(f1.pose)
         else:
             # have ground truth for pose
+            print("Pose:     %f" % pose_opt)
             f1.pose = pose
 
         sbp_pts_count = 0
@@ -150,7 +152,7 @@ class SLAM(object):
 
         # optimize the map
         if frame.id >= 4:
-        # if frame.id >= 4 and frame.id%5 == 0:
+        # if frame.id >= 4 and frame.id % 5 == 0:
             err = self.mapp.optimize() #verbose=True)
             print("Optimize: %f units of error" % err)
 
@@ -165,12 +167,12 @@ if __name__ == "__main__":
         exit(-1)
 
     disp3d = None
-        
+
     if os.getenv("HEADLESS") is None:
         disp3d = Display3D()
 
     cap = cv2.VideoCapture(sys.argv[1])
-    # cap.set(cv2.CAP_PROP_POS_FRAMES, 250)
+    # cap.set(cv2.CAP_PROP_POS_FRAMES, 400)
 
     # camera parameters
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -192,7 +194,7 @@ if __name__ == "__main__":
     K = np.array([[F,0,W//2],[0,F,H//2],[0,0,1]])
     Kinv = np.linalg.inv(K)
 
-    slam = SLAM(W, H, K)
+    slam = SLAM(W, H, K, algorithm = 'ORB')
 
     """
     mapp.deserialize(open('map.json').read())
@@ -221,8 +223,6 @@ if __name__ == "__main__":
 
         key = cv2.waitKey(1)
         if key == ord('q') or key == 27:
-            # if self.graph.stop():
-            cv2.destroyAllWindows()
             break
         elif key == ord('p'):
             cv2.waitKey(-1)
@@ -243,4 +243,5 @@ if __name__ == "__main__":
                 exit(0)
         """
 
-# cv2.destroyAllWindows()
+cv2.destroyAllWindows()
+

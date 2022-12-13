@@ -1,5 +1,7 @@
-import g2o
 import numpy as np
+# np.finfo(np.dtype("float32"))
+# np.finfo(np.dtype("float64"))
+import g2o
 from helpers import poseRt
 
 def optimize(frames, points, local_window, fix_points, verbose=False, rounds=50):
@@ -16,8 +18,8 @@ def optimize(frames, points, local_window, fix_points, verbose=False, rounds=50)
 
     # add normalized camera
     cam = g2o.CameraParameters(1.0, (0.0, 0.0), 0)
-    cam.set_id(0)                       
-    opt.add_parameter(cam)   
+    cam.set_id(0)
+    opt.add_parameter(cam)
 
     robust_kernel = g2o.RobustKernelHuber(np.sqrt(5.991))
     graph_frames, graph_points = {}, {}
@@ -66,7 +68,7 @@ def optimize(frames, points, local_window, fix_points, verbose=False, rounds=50)
             edge.set_information(np.eye(2))
             edge.set_robust_kernel(robust_kernel)
             opt.add_edge(edge)
-            
+
     if verbose:
         opt.set_verbose(True)
     opt.initialize_optimization()

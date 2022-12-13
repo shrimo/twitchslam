@@ -2,6 +2,8 @@ from multiprocessing import Process, Queue
 import pangolin
 import OpenGL.GL as gl
 import numpy as np
+# np.finfo(np.dtype("float32"))
+# np.finfo(np.dtype("float64"))
 
 def draw_axis(size):
     gl.glColor3f(1.0, 0.0, 0.0)
@@ -34,7 +36,7 @@ class Display3D(object):
 
     def viewer_thread(self, q):
         self.viewer_init(self.width, self.height)
-        while 1:
+        while True:
             self.viewer_refresh(q)
 
     def viewer_init(self, w, h):
@@ -89,13 +91,13 @@ class Display3D(object):
             if self.state[0].shape[0] >= 1:
                 # draw current pose as yellow
                 gl.glColor3f(1.0, 1.0, 0.0)
-                pangolin.DrawCameras(self.state[0][-1:])
+                pangolin.DrawCameras(self.state[0])
 
             if self.state[1].shape[0] != 0:
                 # draw keypoints
                 points_color = self.state[2]*np.single(self.gain)
                 gl.glPointSize(self.psize)
-                gl.glColor3f(1.0, 0.0, 0.0)
+                # gl.glColor3f(1.0, 0.0, 0.0)
                 pangolin.DrawPoints(self.state[1], points_color)
 
             draw_trajectory(self.state[3], 1, (1.0, 0.0, 0.0))
@@ -105,20 +107,18 @@ class Display3D(object):
     def paint(self, mapp):
         if self.q is None:
             return
-
-        poses, pts, colors, cam_pts = [], [], [], []
+        pts, colors, cam_pts = [], [], []
+        poses = np.linalg.inv(mapp.frames[-1].pose)
         for f in mapp.frames:
             # invert pose for display only
             f_pose = np.linalg.inv(f.pose)
-            poses.append(f_pose)
-            x = f_pose.ravel()[3]
-            y = f_pose.ravel()[7]
-            z = f_pose.ravel()[11]
-            cam_pts.append([x, y, z])
+            # get position from transform matrix
+            cam_position = f_pose[:,[-1]][:3].ravel()
+            cam_pts.append(cam_position)
         for p in mapp.points:
             pts.append(p.pt)
             colors.append(p.color)
-        self.q.put((np.array(poses), np.array(pts), np.array(colors)/256.0, np.array(cam_pts)))
+        self.q.put((np.array([poses]), np.array(pts), np.array(colors)/256.0, np.array(cam_pts)))
 
 
 
