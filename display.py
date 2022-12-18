@@ -24,7 +24,7 @@ def draw_trajectory(points, psize, color):
     gl.glColor3f(*color)
     pangolin.DrawLine(points)
 
-class Display3D(object):
+class Display3D:
     def __init__(self, width=1280, height=720):
         self.width = width
         self.height = height
@@ -66,6 +66,7 @@ class Display3D(object):
         self.background = pangolin.VarFloat('ui.Background', value=0.0, min=0, max=1)
         self.alpha = pangolin.VarFloat('ui.Alpha', value=1.0, min=0, max=1)
         self.screenshot = pangolin.VarBool('ui.Screenshot', value=False, toggle=False)
+        # self.sequence = pangolin.VarBool('ui.Sequence', value=False, toggle=True)
 
     def viewer_refresh(self, q):
         while not q.empty():
@@ -101,7 +102,6 @@ class Display3D(object):
                 pangolin.DrawPoints(self.state[1], points_color)
 
             draw_trajectory(self.state[3], 1, (1.0, 0.0, 0.0))
-
         pangolin.FinishFrame()
 
     def paint(self, mapp):
@@ -119,6 +119,4 @@ class Display3D(object):
             pts.append(p.pt)
             colors.append(p.color)
         self.q.put((np.array([poses]), np.array(pts), np.array(colors)/256.0, np.array(cam_pts)))
-
-
 

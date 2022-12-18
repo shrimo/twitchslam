@@ -11,10 +11,9 @@ from skimage.measure import ransac
 from helpers import add_ones, poseRt, fundamentalToRt, normalize, EssentialMatrixTransform, myjet
 
 def featureMappingORB(frame):
-    """add amount of points """
     orb = cv2.ORB_create()
     # pts = cv2.goodFeaturesToTrack(np.mean(frame, axis=2).astype(np.uint8), 1000, qualityLevel=0.01, minDistance=7)
-    pts = cv2.goodFeaturesToTrack(np.mean(frame, axis=2).astype(np.uint8), 1000, qualityLevel=0.01, minDistance=7)
+    pts = cv2.goodFeaturesToTrack(np.mean(frame, axis=2).astype(np.uint8), 700, qualityLevel=0.01, minDistance=7)
     key_pts = [cv2.KeyPoint(x=f[0][0], y=f[0][1], size=20) for f in pts]
     key_pts, descriptors = orb.compute(frame, key_pts)
     # Return Key_points and ORB_descriptors
@@ -24,6 +23,13 @@ def featureMappingAKAZE(frame):
     detect = cv2.AKAZE_create()
     frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     key_pts, des = detect.detectAndCompute(frame_gray, None)
+    return np.array([(kp.pt[0], kp.pt[1]) for kp in key_pts]), des
+
+def featureMappingBRIEF(frame):
+    detect = cv2.xfeatures2d.BriefDescriptorExtractor_create()
+    star = cv2.xfeatures2d.StarDetector_create()
+    kp = star.detect(frame, None)
+    key_pts, des = detect.compute(frame, kp)
     return np.array([(kp.pt[0], kp.pt[1]) for kp in key_pts]), des
 
 def featureMappingSURF(frame):
@@ -104,7 +110,9 @@ def show_attributes(frame, attribut):
     cv2.rectangle(frame, (30, 0), (110, 45), (110,50,30), -1)
     cv2.putText(frame, attribut, (45, 30), cv2.FONT_HERSHEY_SIMPLEX , 0.5, (255,255,255), 1)
 
-FT = {'ORB':featureMappingORB, 'AKAZE':featureMappingAKAZE, 'SURF':featureMappingSURF}
+feature_mapping = {'ORB':featureMappingORB, 'AKAZE':featureMappingAKAZE,
+    'BRIEF':featureMappingBRIEF, 'SURF':featureMappingSURF}
+
 class Frame(object):
     def __init__(self, mapp, img, K, pose=np.eye(4), tid=None, verts=None, algorithm='ORB'):
         self.K = np.array(K)
@@ -114,23 +122,23 @@ class Frame(object):
         if img is not None:
             self.h, self.w = img.shape[0:2]
             if verts is None:
-                self.kpus, self.des = FT[algorithm](img)
-                # self.kpus, self.des = extractFeatures(img)
+                self.key_pts, self.des = feature_mapping[algorithm](img)
+                # self.key_pts, self.des = extractFeatures(img)
             else:
                 assert len(verts) < 256
-                self.kpus, self.des = verts, np.array(list(range(len(verts)))*32, np.uint8).reshape(32, len(verts)).T
-            self.pts = [None]*len(self.kpus)
+                self.key_pts, self.des = verts, np.array(list(range(len(verts)))*32, np.uint8).reshape(32, len(verts)).T
+            self.pts = [None]*len(self.key_pts)
         else:
             # fill in later
             self.h, self.w = 0, 0
-            self.kpus, self.des, self.pts = None, None, None
+            self.key_pts, self.des, self.pts = None, None, None
 
         self.id = tid if tid is not None else mapp.add_frame(self)
 
     def annotate(self, img):
         # paint annotations on the image
-        for i1 in range(len(self.kpus)):
-            u1, v1 = int(round(self.kpus[i1][0])), int(round(self.kpus[i1][1]))
+        for i1 in range(len(self.key_pts)):
+            u1, v1 = int(round(self.key_pts[i1][0])), int(round(self.key_pts[i1][1]))
             # if self.pts[i1] is not None:
             #     if len(self.pts[i1].frames) >= 5:
             #         cv2.circle(img, (u1, v1), color=(0,255,0), radius=3)
@@ -164,13 +172,13 @@ class Frame(object):
     @property
     def kps(self):
         if not hasattr(self, '_kps'):
-            self._kps = normalize(self.Kinv, self.kpus)
+            self._kps = normalize(self.Kinv, self.key_pts)
         return self._kps
 
     # KD tree of unnormalized keypoints
     @property
     def kd(self):
         if not hasattr(self, '_kd'):
-            self._kd = cKDTree(self.kpus)
+            self._kd = cKDTree(self.key_pts)
         return self._kd
 

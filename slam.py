@@ -8,16 +8,21 @@ np.finfo(np.dtype("float64"))
 import cv2
 from display import Display3D
 from frame import Frame, match_frames
-# import g2o
 from pointmap import Map, Point
 from helpers import triangulate, add_ones
 
 np.set_printoptions(suppress=True)
 
+def saturation(frame, value):
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)        
+    hsv[...,1] = hsv[...,1]*value
+    return cv2.cvtColor(hsv,cv2.COLOR_HSV2BGR)
+
 class SLAM(object):
-    def __init__(self, W, H, K, algorithm = 'ORB'):
+    def __init__(self, W, H, K, algorithm = 'ORB', frame_step=5):
         # main classes
         self.algorithm = algorithm
+        self.frame_step = frame_step
         self.mapp = Map()
 
         # params
@@ -128,8 +133,8 @@ class SLAM(object):
             pp2 = np.dot(self.K, pl2[:3])
 
             # check reprojection error
-            pp1 = (pp1[0:2] / pp1[2]) - f1.kpus[idx1[i]]
-            pp2 = (pp2[0:2] / pp2[2]) - f2.kpus[idx2[i]]
+            pp1 = (pp1[0:2] / pp1[2]) - f1.key_pts[idx1[i]]
+            pp2 = (pp2[0:2] / pp2[2]) - f2.key_pts[idx2[i]]
             pp1 = np.sum(pp1**2)
             pp2 = np.sum(pp2**2)
             if pp1 > 2 or pp2 > 2:
@@ -138,9 +143,9 @@ class SLAM(object):
             # add the point
             try:
                 # color points from frame
-                cx = int(f1.kpus[idx1[i],0])
-                cy = int(f1.kpus[idx1[i],1])
-                color = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)[cy, cx]
+                cx = int(f1.key_pts[idx1[i],0])
+                cy = int(f1.key_pts[idx1[i],1])
+                color = cv2.cvtColor(saturation(img, 1.4), cv2.COLOR_BGR2RGB)[cy, cx]
             except IndexError:
                 color = (255,0,0)
             pt = Point(self.mapp, p[0:3], color)
@@ -151,8 +156,8 @@ class SLAM(object):
         print("Adding:   %d new points, %d search by projection" % (new_pts_count, sbp_pts_count))
 
         # optimize the map
-        if frame.id >= 4:
-        # if frame.id >= 4 and frame.id % 5 == 0:
+        # if frame.id >= 4:
+        if frame.id >= 4 and frame.id % self.frame_step == 0:
             err = self.mapp.optimize() #verbose=True)
             print("Optimize: %f units of error" % err)
 
@@ -166,13 +171,9 @@ if __name__ == "__main__":
         print("%s <video.mp4>" % sys.argv[0])
         exit(-1)
 
-    disp3d = None
-
-    if os.getenv("HEADLESS") is None:
-        disp3d = Display3D()
+    disp3d = Display3D()
 
     cap = cv2.VideoCapture(sys.argv[1])
-    # cap.set(cv2.CAP_PROP_POS_FRAMES, 400)
 
     # camera parameters
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -194,7 +195,8 @@ if __name__ == "__main__":
     K = np.array([[F,0,W//2],[0,F,H//2],[0,0,1]])
     Kinv = np.linalg.inv(K)
 
-    slam = SLAM(W, H, K, algorithm = 'ORB')
+    # cap.set(cv2.CAP_PROP_POS_FRAMES, 32300)
+    slam = SLAM(W, H, K, algorithm = 'ORB', frame_step=5)
 
     """
     mapp.deserialize(open('map.json').read())
@@ -209,15 +211,15 @@ if __name__ == "__main__":
         # add scale param?
         gt_pose[:, :3, 3] *= 50
 
-    i = 0
+    frame_counter = 0
     cv2.namedWindow('SLAM', cv2.WINDOW_GUI_EXPANDED | cv2.WINDOW_AUTOSIZE)
     while cap.isOpened():
         ret, frame = cap.read()
         frame = cv2.resize(frame, (W, H))
 
-        print("\n*** frame %d/%d ***" % (i, CNT))
+        print("\n*** frame %d/%d ***" % (frame_counter, CNT))
         if ret == True:
-            slam.process_frame(frame, None if gt_pose is None else np.linalg.inv(gt_pose[i]))
+            slam.process_frame(frame, None if gt_pose is None else np.linalg.inv(gt_pose[frame_counter]))
         else:
             break
 
@@ -235,7 +237,7 @@ if __name__ == "__main__":
         img = cv2.resize(img, (int(W*0.75), int(H*0.75)))
         cv2.imshow('SLAM', img)
 
-        i += 1
+        frame_counter += 1
         """
         if i == 10:
             with open('map.json', 'w') as f:
