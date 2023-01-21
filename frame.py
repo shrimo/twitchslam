@@ -13,7 +13,7 @@ from helpers import add_ones, poseRt, fundamentalToRt, normalize, EssentialMatri
 def featureMappingORB(frame):
     orb = cv2.ORB_create()
     # pts = cv2.goodFeaturesToTrack(np.mean(frame, axis=2).astype(np.uint8), 1000, qualityLevel=0.01, minDistance=7)
-    pts = cv2.goodFeaturesToTrack(np.mean(frame, axis=2).astype(np.uint8), 700, qualityLevel=0.01, minDistance=7)
+    pts = cv2.goodFeaturesToTrack(np.mean(frame, axis=2).astype(np.uint8), 1000, qualityLevel=0.01, minDistance=7)
     key_pts = [cv2.KeyPoint(x=f[0][0], y=f[0][1], size=20) for f in pts]
     key_pts, descriptors = orb.compute(frame, key_pts)
     # Return Key_points and ORB_descriptors
@@ -59,13 +59,14 @@ def extractFeatures(img):
     # return pts and des
     return np.array([(kp.pt[0], kp.pt[1]) for kp in kps]), des
 
-matcher_function = {'BF':SLAMBFMatcher, 'Flann':SLAMFlannBasedMatcher}
+bf = cv2.BFMatcher(cv2.NORM_HAMMING)
+# matcher_function = {'BF':SLAMBFMatcher, 'Flann':SLAMFlannBasedMatcher}
 def match_frames(f1, f2):
 
     # bf = cv2.BFMatcher(cv2.NORM_HAMMING)
-    # matches = bf.knnMatch(f1.des, f2.des, k=2)
+    matches = bf.knnMatch(f1.des, f2.des, k=2)
 
-    matches = matcher_function['BF'](f1, f2)
+    # matches = matcher_function['BF'](f1, f2)
 
     # Lowe's ratio test
     ret = []
@@ -110,8 +111,10 @@ def show_attributes(frame, attribut):
     cv2.rectangle(frame, (30, 0), (110, 45), (110,50,30), -1)
     cv2.putText(frame, attribut, (45, 30), cv2.FONT_HERSHEY_SIMPLEX , 0.5, (255,255,255), 1)
 
-feature_mapping = {'ORB':featureMappingORB, 'AKAZE':featureMappingAKAZE,
-    'BRIEF':featureMappingBRIEF, 'SURF':featureMappingSURF}
+feature_mapping = {'ORB':featureMappingORB, 
+                'AKAZE':featureMappingAKAZE,
+                'BRIEF':featureMappingBRIEF,
+                'SURF':featureMappingSURF}
 
 class Frame(object):
     def __init__(self, mapp, img, K, pose=np.eye(4), tid=None, verts=None, algorithm='ORB'):
@@ -119,47 +122,19 @@ class Frame(object):
         self.pose = np.array(pose)
         self.algorithm = algorithm
 
-        if img is not None:
-            self.h, self.w = img.shape[0:2]
-            if verts is None:
-                self.key_pts, self.des = feature_mapping[algorithm](img)
-                # self.key_pts, self.des = extractFeatures(img)
-            else:
-                assert len(verts) < 256
-                self.key_pts, self.des = verts, np.array(list(range(len(verts)))*32, np.uint8).reshape(32, len(verts)).T
-            self.pts = [None]*len(self.key_pts)
-        else:
-            # fill in later
-            self.h, self.w = 0, 0
-            self.key_pts, self.des, self.pts = None, None, None
-
+        self.h, self.w = img.shape[0:2]
+        self.key_pts, self.des = feature_mapping[algorithm](img)
+        self.pts = [None]*len(self.key_pts)
         self.id = tid if tid is not None else mapp.add_frame(self)
 
     def annotate(self, img):
         # paint annotations on the image
-        for i1 in range(len(self.key_pts)):
-            u1, v1 = int(round(self.key_pts[i1][0])), int(round(self.key_pts[i1][1]))
-            # if self.pts[i1] is not None:
-            #     if len(self.pts[i1].frames) >= 5:
-            #         cv2.circle(img, (u1, v1), color=(0,255,0), radius=3)
-            #     else:
-            #         cv2.circle(img, (u1, v1), color=(0,128,0), radius=3)
-            #     # draw the trail
-            #     pts = []
-            #     lfid = None
-            #     for f, idx in zip(self.pts[i1].frames[-9:][::-1], self.pts[i1].idxs[-9:][::-1]):
-            #         if lfid is not None and lfid-1 != f.id:
-            #             break
-            #         pts.append(tuple(map(lambda x: int(round(x)), f.kpus[idx])))
-            #         lfid = f.id
-            #     if len(pts) >= 2:
-            #         cv2.polylines(img, np.array([pts], dtype=np.int32), False, myjet[len(pts)]*255, thickness=1, lineType=16)
-            # else:
+        for pt in self.key_pts:
+            u1, v1 = np.int32(pt[0]), np.int32(pt[1])
             cv2.circle(img, (u1, v1), color=(0, 255, 0), radius=6)
             cv2.drawMarker(img, (u1, v1), (0, 255, 255), 1, 8, 1, 8)
             show_attributes(img, self.algorithm)
         return img
-
 
     # inverse of intrinsics matrix
     @property

@@ -6,6 +6,7 @@ import numpy as np
 np.finfo(np.dtype("float32"))
 np.finfo(np.dtype("float64"))
 import cv2
+# from multiprocessing import Process
 from display import Display3D
 from frame import Frame, match_frames
 from pointmap import Map, Point
@@ -17,17 +18,17 @@ class SLAM(object):
     def __init__(self, W, H, K, algorithm = 'ORB', frame_step=5):
         # main classes
         self.mapp = Map()
+        self.image = None
         # params
         self.W, self.H, self.K = W, H, K
         self.algorithm = algorithm
         self.frame_step = frame_step
-        self.image = None
 
-    def process_frame(self, img, pose=None, verts=None):
+    def process_frame(self, img):
         self.image = img
         start_time = time.time()
         assert self.image.shape[0:2] == (self.H, self.W)
-        frame = Frame(self.mapp, self.image, self.K, verts=verts, algorithm = self.algorithm)
+        frame = Frame(self.mapp, self.image, self.K, verts=None, algorithm = self.algorithm)
 
         if frame.id == 0:
             return
@@ -39,34 +40,22 @@ class SLAM(object):
 
         # add new observations if the point is already observed in the previous frame
         # TODO: consider tradeoff doing this before/after search by projection
-        for i,idx in enumerate(idx2):
+        for i, idx in enumerate(idx2):
             if f2.pts[idx] is not None and f1.pts[idx1[i]] is None:
                 f2.pts[idx].add_observation(f1, idx1[i])
 
-        if frame.id < 5 or True:
-            # get initial positions from fundamental matrix
-            f1.pose = np.dot(Rt, f2.pose)
-        else:
-            # kinematic model (not used)
-            velocity = np.dot(f2.pose, np.linalg.inv(self.mapp.frames[-3].pose))
-            f1.pose = np.dot(velocity, f2.pose)
+        # get initial positions from fundamental matrix
+        f1.pose = Rt @ f2.pose
 
         # pose optimization
-        if pose is None:
-            pose_opt = self.mapp.optimize(local_window=1, fix_points=True)
-            print("Pose:     %f" % pose_opt)
-        else:
-            # have ground truth for pose
-            print("Pose:     %f" % pose_opt)
-            f1.pose = pose
-
+        pose_opt = self.mapp.optimize(local_window=1, fix_points=True)
         sbp_pts_count = 0
 
         # search by projection
         if len(self.mapp.points) > 0:
             # project *all* the map points into the current frame
             map_points = np.array([p.homogeneous() for p in self.mapp.points])
-            projs = np.dot(np.dot(self.K, f1.pose[:3]), map_points.T).T
+            projs = (self.K @ f1.pose[:3] @ map_points.T).T
             projs = projs[:, 0:2] / projs[:, 2:]
 
             # only the points that fit in the frame
@@ -101,7 +90,7 @@ class SLAM(object):
 
         # adding new points to the map from pairwise matches
         new_pts_count = 0
-        for i,p in enumerate(pts4d):
+        for i, p in enumerate(pts4d):
             if not good_pts4d[i]:
                 continue
 
@@ -116,14 +105,14 @@ class SLAM(object):
             """
 
             # check points are in front of both cameras
-            pl1 = np.dot(f1.pose, p)
-            pl2 = np.dot(f2.pose, p)
+            pl1 = f1.pose @ p
+            pl2 = f2.pose @ p
             if pl1[2] < 0 or pl2[2] < 0:
                 continue
 
             # reproject
-            pp1 = np.dot(self.K, pl1[:3])
-            pp2 = np.dot(self.K, pl2[:3])
+            pp1 = self.K @ pl1[:3]
+            pp2 = self.K @ pl2[:3]
 
             # check reprojection error
             pp1 = (pp1[0:2] / pp1[2]) - f1.key_pts[idx1[i]]
@@ -133,15 +122,11 @@ class SLAM(object):
             if pp1 > 2 or pp2 > 2:
                 continue
 
-            # add the point
-            try:
-                # color points from frame
-                cx = int(f1.key_pts[idx1[i],0])
-                cy = int(f1.key_pts[idx1[i],1])
-                # color = cv2.cvtColor(saturation(img, 1.4), cv2.COLOR_BGR2RGB)[cy, cx]
-                color = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)[cy, cx]
-            except IndexError:
-                color = (255,0,0)
+            # color points from frame
+            cx = int(f1.key_pts[idx1[i],0])
+            cy = int(f1.key_pts[idx1[i],1])
+            color = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)[cy, cx]
+
             pt = Point(self.mapp, p[0:3], color)
             pt.add_observation(f2, idx2[i])
             pt.add_observation(f1, idx1[i])
@@ -151,7 +136,10 @@ class SLAM(object):
 
         # optimize the map
         # if frame.id >= 4:
-        if frame.id >= 4 and frame.id % self.frame_step == 0:
+        if frame.id >= 2 and frame.id % self.frame_step == 0:
+            # p_opt = Process(target = self.mapp.optimize())
+            # p_opt.start()
+            # p_opt.join()
             err = self.mapp.optimize() #verbose=True)
             print("Optimize: %f units of error" % err)
 
@@ -175,8 +163,6 @@ if __name__ == "__main__":
 
     CNT = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     F = float(os.getenv("F", "525"))
-    if os.getenv("SEEK") is not None:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, int(os.getenv("SEEK")))
 
     if W > 1024:
         downscale = 1024.0/W
@@ -189,33 +175,17 @@ if __name__ == "__main__":
     K = np.array([[F,0,W//2],[0,F,H//2],[0,0,1]])
     Kinv = np.linalg.inv(K)
 
-    # cap.set(cv2.CAP_PROP_POS_FRAMES, 32300)
-    slam = SLAM(W, H, K, algorithm = 'ORB', frame_step=5)
-
-    """
-    mapp.deserialize(open('map.json').read())
-    while 1:
-        disp3d.paint(mapp)
-        time.sleep(1)
-    """
-
-    gt_pose = None
-    if len(sys.argv) >= 3:
-        gt_pose = np.load(sys.argv[2])['pose']
-        # add scale param?
-        gt_pose[:, :3, 3] *= 50
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 12000)
+    slam = SLAM(W, H, K, algorithm = 'AKAZE', frame_step=4)
 
     frame_counter = 0
     cv2.namedWindow('SLAM', cv2.WINDOW_GUI_EXPANDED | cv2.WINDOW_AUTOSIZE)
     while cap.isOpened():
         ret, frame = cap.read()
         frame = saturation(cv2.resize(frame, (W, H)), 1.2)
-
         print('\n*** frame {}/{} ***'.format(frame_counter, CNT))
         if ret == True:
-            # print(None if gt_pose is None else np.linalg.inv(gt_pose[frame_counter]))
-            # slam.process_frame(frame, None if gt_pose is None else np.linalg.inv(gt_pose[frame_counter]))
-            slam.process_frame(frame, None)
+            slam.process_frame(frame)
         else:
             break
 
@@ -225,21 +195,14 @@ if __name__ == "__main__":
         elif key == ord('p'):
             cv2.waitKey(-1)
 
-        # 3-D display
-        if disp3d is not None:
-            disp3d.paint(slam.mapp)
+        # 3D display
+        disp3d.paint(slam.mapp)
 
+        # 2D display
         img = slam.mapp.frames[-1].annotate(frame)
         img = cv2.resize(img, (int(W*0.75), int(H*0.75)))
         cv2.imshow('SLAM', img)
 
         frame_counter += 1
-        """
-        if i == 10:
-            with open('map.json', 'w') as f:
-                f.write(mapp.serialize())
-                exit(0)
-        """
 
 cv2.destroyAllWindows()
-

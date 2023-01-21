@@ -117,7 +117,7 @@ class Map(object):
             errs = []
             for f, idx in zip(p.frames, p.idxs):
                 uv = f.kps[idx]
-                proj = np.dot(f.pose[:3], p.homogeneous())
+                proj = f.pose[:3] @ p.homogeneous()
                 proj = proj[0:2] / proj[2]
                 errs.append(np.linalg.norm(proj-uv))
 
@@ -127,6 +127,6 @@ class Map(object):
                 self.points.remove(p)
                 p.delete()
         print("Culled:   %d points" % (culled_pt_count))
-
+        # print("Optimize: %f units of error" % err)
         return err
 

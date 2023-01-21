@@ -2,6 +2,13 @@ import os
 import numpy as np
 # np.finfo(np.dtype("float32"))
 # np.finfo(np.dtype("float64"))
+import cv2
+
+def saturation(frame, value):
+    """ Color saturation """
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    hsv[...,1] = hsv[...,1]*value
+    return cv2.cvtColor(hsv,cv2.COLOR_HSV2BGR)
 
 # colors shamelessly stolen from
 # https://github.com/MagicLeapResearch/SuperPointPretrainedNetwork/blob/master/demo_superpoint.py
@@ -16,9 +23,9 @@ myjet = np.array([[0.        , 0.        , 0.5       ],
                   [0.99910873, 0.07334786, 0.        ],
                   [0.5       , 0.        , 0.        ]])
 
+const_r = (1 << np.arange(8))[:,None]
 def hamming_distance(a, b):
-    r = (1 << np.arange(8))[:,None]
-    return np.count_nonzero((np.bitwise_xor(a,b) & r) != 0)
+    return np.count_nonzero((np.bitwise_xor(a,b) & const_r) != 0)
 
 def triangulate(pose1, pose2, pts1, pts2):
     ret = np.zeros((pts1.shape[0], 4))
@@ -47,15 +54,15 @@ def poseRt(R, t):
 
 # pose
 def fundamentalToRt(F):
-    W = np.mat([[0,-1,0],[1,0,0],[0,0,1]],dtype=float)
+    W = np.mat([[0,-1,0],[1,0,0],[0,0,1]], dtype=float)
     U,d,Vt = np.linalg.svd(F)
     if np.linalg.det(U) < 0:
         U *= -1.0
     if np.linalg.det(Vt) < 0:
         Vt *= -1.0
-    R = np.dot(np.dot(U, W), Vt)
+    R = U @ W @ Vt
     if np.sum(R.diagonal()) < 0:
-        R = np.dot(np.dot(U, W.T), Vt)
+        R = U @ W.T @ Vt
     t = U[:, 2]
 
     # TODO: Resolve ambiguities in better ways. This is wrong.
